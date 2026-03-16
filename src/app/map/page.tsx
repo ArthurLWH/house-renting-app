@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { supabase } from "@/lib/supabaseClient";
 
 type Listing = {
   id: number;
@@ -29,17 +28,17 @@ export default function MapPage() {
     const fetchListings = async () => {
       setLoading(true);
       setError(null);
-      const { data, error } = await supabase
-        .from("listings")
-        .select("id, title, price, city, lat, lng")
-        .not("lat", "is", null)
-        .not("lng", "is", null)
-        .limit(100);
-
-      if (error) {
-        setError(error.message);
-      } else {
-        setListings(data ?? []);
+      try {
+        const res = await fetch("/api/listings", { method: "GET" });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json?.error ?? "加载失败");
+        setListings(
+          (json.data ?? []).filter(
+            (l: Listing) => l.lat != null && l.lng != null,
+          ),
+        );
+      } catch (e: any) {
+        setError(e?.message ?? "加载失败");
       }
       setLoading(false);
     };

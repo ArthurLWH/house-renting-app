@@ -1,7 +1,6 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
-import { supabase } from "@/lib/supabaseClient";
 
 type Company = {
   id: number;
@@ -36,15 +35,13 @@ export default function CompaniesPage() {
   const loadCompanies = async () => {
     setLoading(true);
     setError(null);
-    const { data, error } = await supabase
-      .from("companies")
-      .select("id, name, lat, lng")
-      .order("id", { ascending: true });
-
-    if (error) {
-      setError(error.message);
-    } else {
-      setCompanies(data ?? []);
+    try {
+      const res = await fetch("/api/companies", { method: "GET" });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json?.error ?? "加载失败");
+      setCompanies(json.data ?? []);
+    } catch (e: any) {
+      setError(e?.message ?? "加载失败");
     }
     setLoading(false);
   };
@@ -83,14 +80,21 @@ export default function CompaniesPage() {
       }
 
       if (isEditing && form.id) {
-        const { error } = await supabase
-          .from("companies")
-          .update(payload)
-          .eq("id", form.id);
-        if (error) throw error;
+        const res = await fetch("/api/companies", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: form.id, ...payload }),
+        });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json?.error ?? "保存失败");
       } else {
-        const { error } = await supabase.from("companies").insert(payload);
-        if (error) throw error;
+        const res = await fetch("/api/companies", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json?.error ?? "保存失败");
       }
 
       await loadCompanies();
@@ -115,12 +119,10 @@ export default function CompaniesPage() {
     if (!window.confirm("确定要删除这家公司吗？")) return;
     setSaving(true);
     setError(null);
-    const { error } = await supabase.from("companies").delete().eq("id", id);
-    if (error) {
-      setError(error.message);
-    } else {
-      await loadCompanies();
-    }
+    const res = await fetch(`/api/companies?id=${id}`, { method: "DELETE" });
+    const json = await res.json();
+    if (!res.ok) setError(json?.error ?? "删除失败");
+    else await loadCompanies();
     setSaving(false);
   };
 

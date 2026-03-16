@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { supabase } from "@/lib/supabaseClient";
 
 type Listing = {
   id: number;
@@ -25,16 +24,13 @@ export default function Home() {
     const fetchListings = async () => {
       setLoading(true);
       setError(null);
-      const { data, error } = await supabase
-        .from("listings")
-        .select("id, title, description, price, city, cover_url, lat, lng")
-        .order("id", { ascending: false })
-        .limit(50);
-
-      if (error) {
-        setError(error.message);
-      } else {
-        setListings(data ?? []);
+      try {
+        const res = await fetch("/api/listings", { method: "GET" });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json?.error ?? "加载失败");
+        setListings(json.data ?? []);
+      } catch (e: any) {
+        setError(e?.message ?? "加载失败");
       }
       setLoading(false);
     };

@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { supabase } from "@/lib/supabaseClient";
 
 type Listing = {
   id: number;
@@ -42,25 +41,19 @@ export default function CommutePage() {
       setError(null);
       try {
         const [listingsRes, companiesRes] = await Promise.all([
-          supabase
-            .from("listings")
-            .select("id, title, lat, lng")
-            .not("lat", "is", null)
-            .not("lng", "is", null)
-            .order("id", { ascending: false }),
-          supabase
-            .from("companies")
-            .select("id, name, lat, lng")
-            .order("id", { ascending: true }),
+          fetch("/api/listings", { method: "GET" }),
+          fetch("/api/companies", { method: "GET" }),
         ]);
-
-        if (listingsRes.error) throw listingsRes.error;
-        if (companiesRes.error) throw companiesRes.error;
-
-        setListings(listingsRes.data ?? []);
-        setCompanies(companiesRes.data ?? []);
+        const listingsJson = await listingsRes.json();
+        const companiesJson = await companiesRes.json();
+        if (!listingsRes.ok) throw new Error(listingsJson?.error ?? "加载房源失败");
+        if (!companiesRes.ok) throw new Error(companiesJson?.error ?? "加载公司失败");
+        setListings(
+          (listingsJson.data ?? []).filter((l: Listing) => l.lat != null && l.lng != null),
+        );
+        setCompanies(companiesJson.data ?? []);
       } catch (e: any) {
-        setError(e?.message ?? "加载数据失败，请检查 Supabase 表结构和权限。");
+        setError(e?.message ?? "加载数据失败，请检查后端 API 和数据库配置。");
       } finally {
         setLoading(false);
       }
