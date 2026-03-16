@@ -8,6 +8,7 @@ type Listing = {
   description: string | null;
   price: number | null;
   city: string | null;
+  address?: string | null;
   cover_url: string | null;
   lat: number | null;
   lng: number | null;
@@ -17,8 +18,10 @@ export default function Home() {
   const [listings, setListings] = useState<Listing[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [minPrice, setMinPrice] = useState<string>("");
-  const [maxPrice, setMaxPrice] = useState<string>("");
+  const [minPriceDraft, setMinPriceDraft] = useState<string>("");
+  const [maxPriceDraft, setMaxPriceDraft] = useState<string>("");
+  const [minPrice, setMinPrice] = useState<number | null>(null);
+  const [maxPrice, setMaxPrice] = useState<number | null>(null);
 
   useEffect(() => {
     const fetchListings = async () => {
@@ -39,8 +42,8 @@ export default function Home() {
   }, []);
 
   const filteredListings = useMemo(() => {
-    const min = minPrice ? Number(minPrice) : null;
-    const max = maxPrice ? Number(maxPrice) : null;
+    const min = minPrice;
+    const max = maxPrice;
 
     return listings.filter((item) => {
       if (item.price == null) return true;
@@ -50,16 +53,22 @@ export default function Home() {
     });
   }, [listings, minPrice, maxPrice]);
 
+  const priceOptions = useMemo(() => {
+    const opts: number[] = [];
+    for (let v = 0; v <= 20000; v += 500) opts.push(v);
+    return opts;
+  }, []);
+
   return (
     <div className="flex min-h-screen justify-center bg-zinc-50 font-sans">
       <main className="w-full max-w-5xl py-10 px-4 sm:px-8">
         <header className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <h1 className="mb-2 text-3xl font-semibold text-zinc-900">
-              房源租赁系统（公共访问）
+              租呗（最懂年轻人的租房工具）
             </h1>
             <p className="text-zinc-600">
-              无需登录，任何用户都可以直接浏览房源信息、查看地图与通勤时间。
+              内测版 1.0
             </p>
           </div>
           <nav className="flex flex-wrap gap-3 text-sm text-zinc-500">
@@ -99,37 +108,47 @@ export default function Home() {
               <label className="mb-1 block text-xs text-zinc-600">
                 最低租金（元）
               </label>
-              <input
-                type="number"
-                min={0}
-                value={minPrice}
-                onChange={(e) => setMinPrice(e.target.value)}
-                className="w-32 rounded-lg border border-zinc-200 px-2 py-1 text-sm outline-none focus:border-zinc-900 focus:ring-1 focus:ring-zinc-900"
-                placeholder="不限"
-              />
+              <select
+                value={minPriceDraft}
+                onChange={(e) => setMinPriceDraft(e.target.value)}
+                className="h-9 w-36 rounded-lg border border-zinc-200 px-2 text-sm outline-none focus:border-zinc-900 focus:ring-1 focus:ring-zinc-900"
+              >
+                <option value="">不限</option>
+                {priceOptions.map((v) => (
+                  <option key={v} value={String(v)}>
+                    {v}
+                  </option>
+                ))}
+              </select>
             </div>
             <div>
               <label className="mb-1 block text-xs text-zinc-600">
                 最高租金（元）
               </label>
-              <input
-                type="number"
-                min={0}
-                value={maxPrice}
-                onChange={(e) => setMaxPrice(e.target.value)}
-                className="w-32 rounded-lg border border-zinc-200 px-2 py-1 text-sm outline-none focus:border-zinc-900 focus:ring-1 focus:ring-zinc-900"
-                placeholder="不限"
-              />
+              <select
+                value={maxPriceDraft}
+                onChange={(e) => setMaxPriceDraft(e.target.value)}
+                className="h-9 w-36 rounded-lg border border-zinc-200 px-2 text-sm outline-none focus:border-zinc-900 focus:ring-1 focus:ring-zinc-900"
+              >
+                <option value="">不限</option>
+                {priceOptions.map((v) => (
+                  <option key={v} value={String(v)}>
+                    {v}
+                  </option>
+                ))}
+              </select>
             </div>
             <button
               type="button"
               onClick={() => {
-                setMinPrice("");
-                setMaxPrice("");
+                const min = minPriceDraft ? Number(minPriceDraft) : null;
+                const max = maxPriceDraft ? Number(maxPriceDraft) : null;
+                setMinPrice(min);
+                setMaxPrice(max);
               }}
               className="h-8 rounded-full border border-zinc-300 px-3 text-xs text-zinc-700 transition hover:bg-zinc-50"
             >
-              重置
+              确认
             </button>
             <span className="text-xs text-zinc-500">
               当前显示 {filteredListings.length} 套房源
@@ -178,8 +197,8 @@ export default function Home() {
                     <span className="font-medium text-emerald-600">
                       {item.price ? `¥${item.price} / 晚` : "价格待定"}
                     </span>
-                    <span className="text-xs text-zinc-500">
-                      {item.city ?? "城市未知"}
+                    <span className="text-xs text-zinc-500 line-clamp-1">
+                      {item.address || item.city || "位置未知"}
                     </span>
                   </div>
                 </div>

@@ -8,6 +8,7 @@ type Listing = {
   description: string | null;
   price: number | null;
   city: string | null;
+  address?: string | null;
   cover_url: string | null;
   lat: number | null;
   lng: number | null;
@@ -28,6 +29,7 @@ export default function ManageListingsPage() {
     description: string;
     price: string;
     city: string;
+    address: string;
     cover_url: string;
     lat: string;
     lng: string;
@@ -36,6 +38,7 @@ export default function ManageListingsPage() {
     description: "",
     price: "",
     city: "",
+    address: "",
     cover_url: "",
     lat: "",
     lng: "",
@@ -67,6 +70,7 @@ export default function ManageListingsPage() {
       description: "",
       price: "",
       city: "",
+      address: "",
       cover_url: "",
       lat: "",
       lng: "",
@@ -85,6 +89,7 @@ export default function ManageListingsPage() {
       description: form.description.trim() || null,
       price: form.price ? Number(form.price) : null,
       city: form.city.trim() || null,
+      address: form.address.trim() || null,
       cover_url: form.cover_url.trim() || null,
       lat: form.lat ? Number(form.lat) : null,
       lng: form.lng ? Number(form.lng) : null,
@@ -129,6 +134,7 @@ export default function ManageListingsPage() {
       description: item.description ?? "",
       price: item.price != null ? String(item.price) : "",
       city: item.city ?? "",
+      address: item.address ?? "",
       cover_url: item.cover_url ?? "",
       lat: item.lat != null ? String(item.lat) : "",
       lng: item.lng != null ? String(item.lng) : "",
@@ -155,7 +161,7 @@ export default function ManageListingsPage() {
               房源管理（添加 / 编辑 / 删除）
             </h1>
             <p className="text-sm text-zinc-600">
-              通过 Supabase 的 <code>listings</code> 表管理房源数据。
+              通过 CloudBase 的 <code>listings</code> 集合管理房源数据。
             </p>
           </div>
           <a
@@ -235,10 +241,14 @@ export default function ManageListingsPage() {
                       if (!res.ok) {
                         throw new Error(data?.error ?? "解析失败");
                       }
+                      if (!form.title.trim() && data?.title) {
+                        setForm((f) => ({ ...f, title: String(data.title) }));
+                      }
                       setForm((f) => ({
                         ...f,
                         lat: String(data.lat),
                         lng: String(data.lng),
+                        address: String(data.formatted_address ?? ""),
                       }));
                     } catch (e: any) {
                       setGeocodeError(e?.message ?? "解析失败，请稍后重试。");
@@ -256,6 +266,21 @@ export default function ManageListingsPage() {
                   </span>
                 )}
               </div>
+            </div>
+
+            <div>
+              <label className="mb-1 block text-sm font-medium text-zinc-700">
+                位置（自动解析，可手动修改）
+              </label>
+              <input
+                type="text"
+                value={form.address}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, address: e.target.value }))
+                }
+                className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm outline-none focus:border-zinc-900 focus:ring-1 focus:ring-zinc-900"
+                placeholder="例如：上海市杨浦区…（可从高德复制内容自动解析）"
+              />
             </div>
 
             <div className="grid gap-3 sm:grid-cols-2">

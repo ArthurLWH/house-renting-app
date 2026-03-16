@@ -7,6 +7,7 @@ type Listing = {
   description?: string | null;
   price?: number | null;
   city?: string | null;
+  address?: string | null;
   cover_url?: string | null;
   lat?: number | null;
   lng?: number | null;
