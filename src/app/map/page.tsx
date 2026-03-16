@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 type Listing = {
   id: number;
@@ -10,8 +10,16 @@ type Listing = {
   address?: string | null;
   water_price?: number | null;
   electricity_price?: number | null;
+  commute_company_id?: number | null;
+  commute_duration_sec?: number | null;
+  commute_distance_m?: number | null;
   lat: number | null;
   lng: number | null;
+};
+
+type Company = {
+  id: number;
+  name: string;
 };
 
 declare global {
@@ -22,32 +30,45 @@ declare global {
 
 export default function MapPage() {
   const [listings, setListings] = useState<Listing[]>([]);
+  const [companies, setCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const mapRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<any>(null);
 
   useEffect(() => {
-    const fetchListings = async () => {
+    const fetchData = async () => {
       setLoading(true);
       setError(null);
       try {
-        const res = await fetch("/api/listings", { method: "GET" });
-        const json = await res.json();
-        if (!res.ok) throw new Error(json?.error ?? "加载失败");
+        const [listingsRes, companiesRes] = await Promise.all([
+          fetch("/api/listings", { method: "GET" }),
+          fetch("/api/companies", { method: "GET" }),
+        ]);
+        const listingsJson = await listingsRes.json();
+        const companiesJson = await companiesRes.json();
+        if (!listingsRes.ok) throw new Error(listingsJson?.error ?? "加载失败");
+        if (!companiesRes.ok) throw new Error(companiesJson?.error ?? "加载失败");
         setListings(
-          (json.data ?? []).filter(
+          (listingsJson.data ?? []).filter(
             (l: Listing) => l.lat != null && l.lng != null,
           ),
         );
+        setCompanies(companiesJson.data ?? []);
       } catch (e: any) {
         setError(e?.message ?? "加载失败");
       }
       setLoading(false);
     };
 
-    fetchListings();
+    fetchData();
   }, []);
+
+  const companyNameById = useMemo(() => {
+    const map = new Map<number, string>();
+    companies.forEach((c) => map.set(c.id, c.name));
+    return map;
+  }, [companies]);
 
   useEffect(() => {
     if (!mapRef.current) return;
@@ -69,6 +90,19 @@ export default function MapPage() {
 
       listings.forEach((item) => {
         if (item.lng == null || item.lat == null) return;
+        const commuteMin =
+          item.commute_duration_sec != null
+            ? Math.round(item.commute_duration_sec / 60)
+            : null;
+        const commuteKm =
+          item.commute_distance_m != null
+            ? (item.commute_distance_m / 1000).toFixed(1)
+            : null;
+        const companyName =
+          item.commute_company_id != null
+            ? companyNameById.get(item.commute_company_id) ?? null
+            : null;
+
         const marker = new window.AMap.Marker({
           position: [item.lng, item.lat],
           title: item.title,
@@ -79,7 +113,7 @@ export default function MapPage() {
           <div style="font-size:12px;">
             <div style="font-weight:600;margin-bottom:4px;">${item.title}</div>
             <div style="margin-bottom:2px;">${
-              item.price ? `¥${item.price}` : "价格待定"
+              item.price ? `¥${item.price} / 月` : "价格待定"
             }</div>
             <div style="color:#6b7280;margin-bottom:2px;">${
               item.address || item.city || "位置未知"
@@ -94,6 +128,15 @@ export default function MapPage() {
               item.electricity_price != null
                 ? `电¥${item.electricity_price}/度`
                 : ""
+            }</div>
+            <div style="color:#6b7280;margin-top:2px;">${
+              companyName
+                ? `通勤到「${companyName}」：${commuteMin ?? "?"} 分钟${
+                    commuteKm ? ` · ${commuteKm} km` : ""
+                  }`
+                : commuteMin != null
+                  ? `通勤：${commuteMin} 分钟${commuteKm ? ` · ${commuteKm} km` : ""}`
+                  : ""
             }</div>
           </div>
         `;

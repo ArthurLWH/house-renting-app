@@ -20,6 +20,32 @@ function extractFromAmapCopy(text: string) {
   return { title, address: address || text, url };
 }
 
+function tryParseLocationFromUrl(raw: string): { lng: number; lat: number } | null {
+  try {
+    const u = new URL(raw);
+    const params = u.searchParams;
+    const candidates = [
+      params.get("location"),
+      params.get("position"),
+      params.get("lnglat"),
+      params.get("coordinate"),
+      params.get("q"), // 某些分享链接会把参数塞在 q 里
+    ].filter(Boolean) as string[];
+
+    for (const c of candidates) {
+      const m = c.match(/(-?\d+(\.\d+)?),\s*(-?\d+(\.\d+)?)/);
+      if (m) {
+        const lng = Number(m[1]);
+        const lat = Number(m[3]);
+        if (!Number.isNaN(lng) && !Number.isNaN(lat)) return { lng, lat };
+      }
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
@@ -41,6 +67,55 @@ export async function POST(req: NextRequest) {
     }
 
     const extracted = extractFromAmapCopy(text);
+
+    // 优先：如果有高德分享链接，尽量从链接解析坐标（更精确）
+    if (extracted.url) {
+      try {
+        // 1) 直接从链接参数里解析
+        const direct = tryParseLocationFromUrl(extracted.url);
+        let loc = direct;
+
+        // 2) 尝试跟随跳转，解析最终 URL / HTML 中的坐标
+        if (!loc) {
+          const r = await fetch(extracted.url, { redirect: "follow" });
+          const finalUrl = r.url || extracted.url;
+          loc = tryParseLocationFromUrl(finalUrl);
+          if (!loc) {
+            const html = await r.text();
+            const m = html.match(
+              /(-?\d{2,3}\.\d+)\s*,\s*(-?\d{2,3}\.\d+)/,
+            );
+            if (m) {
+              const lng = Number(m[1]);
+              const lat = Number(m[2]);
+              if (!Number.isNaN(lng) && !Number.isNaN(lat)) loc = { lng, lat };
+            }
+          }
+        }
+
+        if (loc) {
+          // 反查地址（可选但体验好）
+          const regeo = new URL("https://restapi.amap.com/v3/geocode/regeo");
+          regeo.searchParams.set("key", key);
+          regeo.searchParams.set("location", `${loc.lng},${loc.lat}`);
+          regeo.searchParams.set("radius", "1000");
+          regeo.searchParams.set("extensions", "base");
+          const regeoRes = await fetch(regeo.toString());
+          const regeoJson = await regeoRes.json();
+          const formatted =
+            regeoJson?.regeocode?.formatted_address ?? null;
+
+          return NextResponse.json({
+            lat: loc.lat,
+            lng: loc.lng,
+            formatted_address: formatted,
+            title: extracted.title,
+          });
+        }
+      } catch {
+        // 忽略链接解析失败，回退到地理编码
+      }
+    }
 
     const url = new URL("https://restapi.amap.com/v3/geocode/geo");
     url.searchParams.set("key", key);

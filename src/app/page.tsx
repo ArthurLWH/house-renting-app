@@ -11,6 +11,9 @@ type Listing = {
   address?: string | null;
   water_price?: number | null;
   electricity_price?: number | null;
+  commute_company_id?: number | null;
+  commute_duration_sec?: number | null;
+  commute_distance_m?: number | null;
   cover_url: string | null;
   lat: number | null;
   lng: number | null;
@@ -24,6 +27,8 @@ export default function Home() {
   const [maxPriceDraft, setMaxPriceDraft] = useState<string>("");
   const [minPrice, setMinPrice] = useState<number | null>(null);
   const [maxPrice, setMaxPrice] = useState<number | null>(null);
+  const [maxCommuteDraft, setMaxCommuteDraft] = useState<string>("");
+  const [maxCommuteMin, setMaxCommuteMin] = useState<number | null>(null);
 
   useEffect(() => {
     const fetchListings = async () => {
@@ -51,13 +56,24 @@ export default function Home() {
       if (item.price == null) return true;
       if (min != null && item.price < min) return false;
       if (max != null && item.price > max) return false;
+      if (maxCommuteMin != null) {
+        if (item.commute_duration_sec == null) return false;
+        const minutes = item.commute_duration_sec / 60;
+        if (minutes > maxCommuteMin) return false;
+      }
       return true;
     });
-  }, [listings, minPrice, maxPrice]);
+  }, [listings, minPrice, maxPrice, maxCommuteMin]);
 
   const priceOptions = useMemo(() => {
     const opts: number[] = [];
     for (let v = 0; v <= 20000; v += 500) opts.push(v);
+    return opts;
+  }, []);
+
+  const commuteOptions = useMemo(() => {
+    const opts: number[] = [];
+    for (let v = 2; v <= 120; v += 2) opts.push(v); // 2 分钟步长，最多 2 小时
     return opts;
   }, []);
 
@@ -103,7 +119,7 @@ export default function Home() {
 
         <section className="mb-4 rounded-xl bg-white p-4 shadow-sm">
           <h2 className="mb-3 text-sm font-medium text-zinc-900">
-            租金筛选
+            筛选
           </h2>
           <div className="flex flex-wrap items-end gap-3 text-sm">
             <div>
@@ -140,6 +156,23 @@ export default function Home() {
                 ))}
               </select>
             </div>
+            <div>
+              <label className="mb-1 block text-xs text-zinc-600">
+                通勤时间（分钟，≤）
+              </label>
+              <select
+                value={maxCommuteDraft}
+                onChange={(e) => setMaxCommuteDraft(e.target.value)}
+                className="h-9 w-44 rounded-lg border border-zinc-200 px-2 text-sm outline-none focus:border-zinc-900 focus:ring-1 focus:ring-zinc-900"
+              >
+                <option value="">不限</option>
+                {commuteOptions.map((v) => (
+                  <option key={v} value={String(v)}>
+                    {v} 分钟
+                  </option>
+                ))}
+              </select>
+            </div>
             <button
               type="button"
               onClick={() => {
@@ -147,6 +180,7 @@ export default function Home() {
                 const max = maxPriceDraft ? Number(maxPriceDraft) : null;
                 setMinPrice(min);
                 setMaxPrice(max);
+                setMaxCommuteMin(maxCommuteDraft ? Number(maxCommuteDraft) : null);
               }}
               className="h-8 rounded-full border border-zinc-300 px-3 text-xs text-zinc-700 transition hover:bg-zinc-50"
             >
@@ -192,6 +226,12 @@ export default function Home() {
                   <h3 className="mb-1 line-clamp-1 text-base font-semibold text-zinc-900">
                     {item.title}
                   </h3>
+                  <a
+                    href={`/manage?editId=${item.id}`}
+                    className="mb-2 inline-flex w-fit rounded-full border border-zinc-200 px-2 py-0.5 text-[11px] text-zinc-600 hover:bg-zinc-50"
+                  >
+                    编辑
+                  </a>
                   <p className="mb-2 line-clamp-2 text-xs text-zinc-500">
                     {item.description}
                   </p>
@@ -208,10 +248,23 @@ export default function Home() {
                   )}
                   <div className="mt-auto flex items-center justify-between text-sm">
                     <span className="font-medium text-emerald-600">
-                      {item.price ? `¥${item.price} / 晚` : "价格待定"}
+                      {item.price ? `¥${item.price} / 月` : "价格待定"}
                     </span>
                     <span className="text-xs text-zinc-500 line-clamp-1">
                       {item.address || item.city || "位置未知"}
+                    </span>
+                  </div>
+                  <div className="mt-2 flex items-center justify-between text-xs text-zinc-500">
+                    <span>
+                      通勤：
+                      {item.commute_duration_sec != null
+                        ? `${Math.round(item.commute_duration_sec / 60)} 分钟`
+                        : "未计算"}
+                    </span>
+                    <span>
+                      {item.commute_distance_m != null
+                        ? `${(item.commute_distance_m / 1000).toFixed(1)} km`
+                        : ""}
                     </span>
                   </div>
                 </div>
