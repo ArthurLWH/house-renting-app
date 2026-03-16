@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 type Listing = {
   id: number;
@@ -22,6 +22,13 @@ type CommuteResult = {
   walking_distance: number;
 };
 
+declare global {
+  interface Window {
+    AMap?: any;
+    _AMapSecurityConfig?: { securityJsCode: string };
+  }
+}
+
 export default function CommutePage() {
   const [listings, setListings] = useState<Listing[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
@@ -34,6 +41,20 @@ export default function CommutePage() {
   const [commuting, setCommuting] = useState(false);
   const [commuteError, setCommuteError] = useState<string | null>(null);
   const [result, setResult] = useState<CommuteResult | null>(null);
+
+  const mapRef = useRef<HTMLDivElement | null>(null);
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  const mapInstanceRef = useRef<any>(null);
+  const transferRef = useRef<any>(null);
+
+  const selectedListing = useMemo(
+    () => listings.find((l) => l.id === selectedListingId) ?? null,
+    [listings, selectedListingId],
+  );
+  const selectedCompany = useMemo(
+    () => companies.find((c) => c.id === selectedCompanyId) ?? null,
+    [companies, selectedCompanyId],
+  );
 
   useEffect(() => {
     const load = async () => {
@@ -66,8 +87,8 @@ export default function CommutePage() {
     setCommuteError(null);
     setResult(null);
 
-    const listing = listings.find((l) => l.id === selectedListingId);
-    const company = companies.find((c) => c.id === selectedCompanyId);
+    const listing = selectedListing;
+    const company = selectedCompany;
 
     if (!listing || !company || listing.lat == null || listing.lng == null) {
       setCommuteError("请选择带有经纬度的房源和公司。");
@@ -76,6 +97,11 @@ export default function CommutePage() {
 
     setCommuting(true);
     try {
+      // 1) 用高德 JS SDK 渲染“高德风格”的公交换乘面板 + 地图路线
+      await ensureAmapReady();
+      renderTransitRoute(listing, company);
+
+      // 2) 同时调用服务端接口拿一个摘要（时间/距离）作为补充
       const res = await fetch("/api/commute", {
         method: "POST",
         headers: {
@@ -102,6 +128,92 @@ export default function CommutePage() {
     } finally {
       setCommuting(false);
     }
+  };
+
+  const ensureAmapReady = async () => {
+    if (window.AMap) return;
+
+    const res = await fetch("/api/config", { method: "GET" });
+    const json = await res.json();
+    const key = json?.amapJsKey;
+    const securityJsCode = json?.securityJsCode;
+    if (!key) throw new Error("缺少 NEXT_PUBLIC_AMAP_JS_KEY 环境变量");
+    if (securityJsCode) {
+      window._AMapSecurityConfig = { securityJsCode: String(securityJsCode) };
+    }
+
+    const existing = document.querySelector<HTMLScriptElement>(
+      'script[data-amap="true"]'
+    );
+    if (existing) {
+      if (window.AMap) return;
+      await new Promise<void>((resolve, reject) => {
+        existing.addEventListener("load", () => resolve(), { once: true });
+        existing.addEventListener("error", () => reject(new Error("高德地图脚本加载失败")), {
+          once: true,
+        });
+      });
+      return;
+    }
+
+    await new Promise<void>((resolve, reject) => {
+      const script = document.createElement("script");
+      script.src = `https://webapi.amap.com/maps?v=2.0&key=${key}`;
+      script.async = true;
+      script.dataset.amap = "true";
+      script.onload = () => resolve();
+      script.onerror = () => reject(new Error("高德地图脚本加载失败，请检查 key 是否正确。"));
+      document.body.appendChild(script);
+    });
+  };
+
+  const renderTransitRoute = (listing: Listing, company: Company) => {
+    if (!mapRef.current || !panelRef.current) return;
+    if (!window.AMap) return;
+
+    // 清空面板
+    panelRef.current.innerHTML = "";
+
+    if (!mapInstanceRef.current) {
+      mapInstanceRef.current = new window.AMap.Map(mapRef.current, {
+        zoom: 12,
+        center: [listing.lng!, listing.lat!],
+      });
+    }
+
+    const map = mapInstanceRef.current;
+
+    // 确保插件加载
+    window.AMap.plugin(["AMap.Transfer"], () => {
+      // 释放旧实例
+      if (transferRef.current) {
+        try {
+          transferRef.current.clear?.();
+        } catch {}
+        transferRef.current = null;
+      }
+
+      const transfer = new window.AMap.Transfer({
+        map,
+        panel: panelRef.current,
+        city: "上海", // 可后续做成可配置/自动识别
+        policy: window.AMap.TransferPolicy?.LEAST_TIME ?? 0,
+      });
+
+      transfer.search(
+        new window.AMap.LngLat(listing.lng!, listing.lat!),
+        new window.AMap.LngLat(company.lng, company.lat),
+        (status: string, res: any) => {
+          if (status !== "complete") {
+            setCommuteError(res?.info ?? "未能获取通勤方案（公交换乘）");
+          } else {
+            setCommuteError(null);
+          }
+        },
+      );
+
+      transferRef.current = transfer;
+    });
   };
 
   const formatMinutes = (seconds: number) =>
@@ -140,8 +252,9 @@ export default function CommutePage() {
         )}
 
         {!loading && !error && (
-          <section className="grid gap-6 rounded-xl bg-white p-5 shadow-sm sm:grid-cols-2">
-            <div className="space-y-4">
+          <section className="grid gap-6 rounded-xl bg-white p-5 shadow-sm">
+            <div className="grid gap-6 sm:grid-cols-2">
+              <div className="space-y-4">
               <div>
                 <label className="mb-1 block text-sm font-medium text-zinc-700">
                   选择公司
@@ -215,9 +328,9 @@ export default function CommutePage() {
                   {commuteError}
                 </p>
               )}
-            </div>
+              </div>
 
-            <div className="space-y-3 border-t border-zinc-100 pt-4 text-sm sm:border-l sm:border-t-0 sm:pl-5 sm:pt-0">
+              <div className="space-y-3 border-t border-zinc-100 pt-4 text-sm sm:border-l sm:border-t-0 sm:pl-5 sm:pt-0">
               <h2 className="text-base font-medium text-zinc-900">
                 通勤结果
               </h2>
@@ -251,6 +364,23 @@ export default function CommutePage() {
                   </p>
                 </div>
               )}
+              </div>
+            </div>
+
+            <div className="grid gap-4 pt-2 lg:grid-cols-[1fr_420px]">
+              <div
+                ref={mapRef}
+                className="h-[520px] w-full rounded-xl bg-zinc-200"
+              />
+              <div className="rounded-xl border border-zinc-100 bg-white p-3">
+                <div className="mb-2 text-sm font-medium text-zinc-900">
+                  高德路线详情（公交换乘）
+                </div>
+                <div
+                  ref={panelRef}
+                  className="h-[480px] overflow-auto text-sm"
+                />
+              </div>
             </div>
           </section>
         )}

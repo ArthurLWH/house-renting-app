@@ -7,6 +7,9 @@ export async function GET() {
       process.env.NEXT_PUBLIC_AMAP_JS_KEY ||
       process.env.AMAP_JS_KEY ||
       null,
+    securityJsCode:
+      process.env.AMAP_SECURITY_JSCODE ||
+      null,
   });
 }
 
