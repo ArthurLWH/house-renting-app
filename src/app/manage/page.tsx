@@ -49,7 +49,7 @@ export default function ManageListingsPage() {
     setError(null);
     const { data, error } = await supabase
       .from("listings")
-      .select("id, title, description, price, city, cover_url")
+      .select("id, title, description, price, city, cover_url, lat, lng")
       .order("id", { ascending: false });
 
     if (error) {
