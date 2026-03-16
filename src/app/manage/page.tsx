@@ -9,6 +9,8 @@ type Listing = {
   price: number | null;
   city: string | null;
   address?: string | null;
+  water_price?: number | null;
+  electricity_price?: number | null;
   cover_url: string | null;
   lat: number | null;
   lng: number | null;
@@ -30,6 +32,8 @@ export default function ManageListingsPage() {
     price: string;
     city: string;
     address: string;
+    water_price: string;
+    electricity_price: string;
     cover_url: string;
     lat: string;
     lng: string;
@@ -39,6 +43,8 @@ export default function ManageListingsPage() {
     price: "",
     city: "",
     address: "",
+    water_price: "",
+    electricity_price: "",
     cover_url: "",
     lat: "",
     lng: "",
@@ -71,6 +77,8 @@ export default function ManageListingsPage() {
       price: "",
       city: "",
       address: "",
+      water_price: "",
+      electricity_price: "",
       cover_url: "",
       lat: "",
       lng: "",
@@ -90,6 +98,8 @@ export default function ManageListingsPage() {
       price: form.price ? Number(form.price) : null,
       city: form.city.trim() || null,
       address: form.address.trim() || null,
+      water_price: form.water_price ? Number(form.water_price) : null,
+      electricity_price: form.electricity_price ? Number(form.electricity_price) : null,
       cover_url: form.cover_url.trim() || null,
       lat: form.lat ? Number(form.lat) : null,
       lng: form.lng ? Number(form.lng) : null,
@@ -135,6 +145,9 @@ export default function ManageListingsPage() {
       price: item.price != null ? String(item.price) : "",
       city: item.city ?? "",
       address: item.address ?? "",
+      water_price: item.water_price != null ? String(item.water_price) : "",
+      electricity_price:
+        item.electricity_price != null ? String(item.electricity_price) : "",
       cover_url: item.cover_url ?? "",
       lat: item.lat != null ? String(item.lat) : "",
       lng: item.lng != null ? String(item.lng) : "",
@@ -311,6 +324,44 @@ export default function ManageListingsPage() {
                   }
                   className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm outline-none focus:border-zinc-900 focus:ring-1 focus:ring-zinc-900"
                   placeholder="可先用网络图片或 Supabase Storage 链接"
+                />
+              </div>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <label className="mb-1 block text-sm font-medium text-zinc-700">
+                  水费单价（元 / 吨）
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={form.water_price}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, water_price: e.target.value }))
+                  }
+                  className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm outline-none focus:border-zinc-900 focus:ring-1 focus:ring-zinc-900"
+                  placeholder="例如：5.0"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-zinc-700">
+                  电费单价（元 / 度）
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={form.electricity_price}
+                  onChange={(e) =>
+                    setForm((f) => ({
+                      ...f,
+                      electricity_price: e.target.value,
+                    }))
+                  }
+                  className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm outline-none focus:border-zinc-900 focus:ring-1 focus:ring-zinc-900"
+                  placeholder="例如：0.8"
                 />
               </div>
             </div>

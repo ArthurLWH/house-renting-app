@@ -8,6 +8,8 @@ type Listing = {
   price?: number | null;
   city?: string | null;
   address?: string | null;
+  water_price?: number | null;
+  electricity_price?: number | null;
   cover_url?: string | null;
   lat?: number | null;
   lng?: number | null;

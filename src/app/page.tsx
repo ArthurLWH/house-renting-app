@@ -9,6 +9,8 @@ type Listing = {
   price: number | null;
   city: string | null;
   address?: string | null;
+  water_price?: number | null;
+  electricity_price?: number | null;
   cover_url: string | null;
   lat: number | null;
   lng: number | null;
@@ -193,6 +195,17 @@ export default function Home() {
                   <p className="mb-2 line-clamp-2 text-xs text-zinc-500">
                     {item.description}
                   </p>
+                  {(item.water_price != null || item.electricity_price != null) && (
+                    <p className="mb-2 text-xs text-zinc-500">
+                      {item.water_price != null ? `水¥${item.water_price}/吨` : ""}
+                      {item.water_price != null && item.electricity_price != null
+                        ? " · "
+                        : ""}
+                      {item.electricity_price != null
+                        ? `电¥${item.electricity_price}/度`
+                        : ""}
+                    </p>
+                  )}
                   <div className="mt-auto flex items-center justify-between text-sm">
                     <span className="font-medium text-emerald-600">
                       {item.price ? `¥${item.price} / 晚` : "价格待定"}

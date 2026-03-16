@@ -7,6 +7,9 @@ type Listing = {
   title: string;
   price: number | null;
   city: string | null;
+  address?: string | null;
+  water_price?: number | null;
+  electricity_price?: number | null;
   lat: number | null;
   lng: number | null;
 };
@@ -78,7 +81,20 @@ export default function MapPage() {
             <div style="margin-bottom:2px;">${
               item.price ? `¥${item.price}` : "价格待定"
             }</div>
-            <div style="color:#6b7280;">${item.city ?? "城市未知"}</div>
+            <div style="color:#6b7280;margin-bottom:2px;">${
+              item.address || item.city || "位置未知"
+            }</div>
+            <div style="color:#6b7280;">${
+              item.water_price != null ? `水¥${item.water_price}/吨` : ""
+            }${
+              item.water_price != null && item.electricity_price != null
+                ? " · "
+                : ""
+            }${
+              item.electricity_price != null
+                ? `电¥${item.electricity_price}/度`
+                : ""
+            }</div>
           </div>
         `;
         const infoWindow = new window.AMap.InfoWindow({
@@ -99,27 +115,42 @@ export default function MapPage() {
         initMap();
         return;
       }
-      const key = process.env.NEXT_PUBLIC_AMAP_JS_KEY;
-      if (!key) {
-        setError("缺少 NEXT_PUBLIC_AMAP_JS_KEY 环境变量");
-        return;
-      }
-      const existing = document.querySelector<HTMLScriptElement>(
-        'script[data-amap="true"]'
-      );
-      if (existing) {
-        existing.addEventListener("load", initMap, { once: true });
-        return;
-      }
-      const script = document.createElement("script");
-      script.src = `https://webapi.amap.com/maps?v=2.0&key=${key}`;
-      script.async = true;
-      script.dataset.amap = "true";
-      script.onload = initMap;
-      script.onerror = () => {
-        setError("高德地图脚本加载失败，请检查 key 是否正确。");
+
+      const loadScript = (key: string) => {
+        const existing = document.querySelector<HTMLScriptElement>(
+          'script[data-amap="true"]'
+        );
+        if (existing) {
+          existing.addEventListener("load", initMap, { once: true });
+          return;
+        }
+        const script = document.createElement("script");
+        script.src = `https://webapi.amap.com/maps?v=2.0&key=${key}`;
+        script.async = true;
+        script.dataset.amap = "true";
+        script.onload = initMap;
+        script.onerror = () => {
+          setError("高德地图脚本加载失败，请检查 key 是否正确。");
+        };
+        document.body.appendChild(script);
       };
-      document.body.appendChild(script);
+
+      const tryKey = async () => {
+        const inlineKey = process.env.NEXT_PUBLIC_AMAP_JS_KEY;
+        if (inlineKey) return loadScript(inlineKey);
+
+        try {
+          const res = await fetch("/api/config", { method: "GET" });
+          const json = await res.json();
+          const k = json?.amapJsKey;
+          if (!k) throw new Error("missing key");
+          loadScript(String(k));
+        } catch {
+          setError("缺少 NEXT_PUBLIC_AMAP_JS_KEY 环境变量");
+        }
+      };
+
+      void tryKey();
     };
 
     if (!loading && !error) {
