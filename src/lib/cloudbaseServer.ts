@@ -22,6 +22,11 @@ export function getCloudbaseDb() {
 
   const secretId = process.env.TENCENTCLOUD_SECRETID || process.env.SECRETID;
   const secretKey = process.env.TENCENTCLOUD_SECRETKEY || process.env.SECRETKEY;
+  const token =
+    process.env.TENCENTCLOUD_SESSIONTOKEN ||
+    process.env.SESSIONTOKEN ||
+    process.env.TENCENTCLOUD_TOKEN ||
+    process.env.TOKEN;
 
   const app = cloudbase.init({
     env: envId,
@@ -33,6 +38,19 @@ export function getCloudbaseDb() {
           secretKey: getRequiredEnv(
             process.env.TENCENTCLOUD_SECRETKEY ? "TENCENTCLOUD_SECRETKEY" : "SECRETKEY",
           ),
+          ...(token
+            ? {
+                token: getRequiredEnv(
+                  process.env.TENCENTCLOUD_SESSIONTOKEN
+                    ? "TENCENTCLOUD_SESSIONTOKEN"
+                    : process.env.SESSIONTOKEN
+                      ? "SESSIONTOKEN"
+                      : process.env.TENCENTCLOUD_TOKEN
+                        ? "TENCENTCLOUD_TOKEN"
+                        : "TOKEN",
+                ),
+              }
+            : {}),
         }
       : {}),
   });
