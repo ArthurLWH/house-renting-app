@@ -77,6 +77,11 @@ export default function Home() {
     return opts;
   }, []);
 
+  const formatKm = (m: number | null | undefined) =>
+    m == null ? null : `${(m / 1000).toFixed(1)}km`;
+  const formatMin = (sec: number | null | undefined) =>
+    sec == null ? null : `${Math.round(sec / 60)}分钟`;
+
   return (
     <div className="flex min-h-screen justify-center bg-zinc-50 font-sans">
       <main className="w-full max-w-5xl py-10 px-4 sm:px-8">
@@ -192,7 +197,7 @@ export default function Home() {
           </div>
         </section>
 
-        <section className="rounded-xl bg-white p-4 shadow-sm">
+        <section className="rounded-2xl bg-white p-4 shadow-sm">
           <h2 className="mb-4 text-lg font-medium text-zinc-900">房源列表</h2>
           {loading && (
             <p className="text-sm text-zinc-500">正在加载房源...</p>
@@ -206,66 +211,76 @@ export default function Home() {
             </p>
           )}
 
-          <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="mt-4 divide-y divide-zinc-100 rounded-xl border border-zinc-100">
             {filteredListings.map((item) => (
               <article
                 key={item.id}
-                className="flex flex-col overflow-hidden rounded-xl border border-zinc-100 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+                className="flex gap-3 bg-white p-4 transition hover:bg-zinc-50"
               >
-                {item.cover_url && (
-                  <div className="h-40 w-full overflow-hidden bg-zinc-100">
-                    {/* 这里可以后续换成 next/image */}
+                <div className="h-20 w-28 shrink-0 overflow-hidden rounded-xl bg-zinc-100">
+                  {item.cover_url ? (
                     <img
                       src={item.cover_url}
                       alt={item.title}
                       className="h-full w-full object-cover"
                     />
-                  </div>
-                )}
-                <div className="flex flex-1 flex-col p-4">
-                  <h3 className="mb-1 line-clamp-1 text-base font-semibold text-zinc-900">
-                    {item.title}
-                  </h3>
-                  <a
-                    href={`/manage?editId=${item.id}`}
-                    className="mb-2 inline-flex w-fit rounded-full border border-zinc-200 px-2 py-0.5 text-[11px] text-zinc-600 hover:bg-zinc-50"
-                  >
-                    编辑
-                  </a>
-                  <p className="mb-2 line-clamp-2 text-xs text-zinc-500">
-                    {item.description}
-                  </p>
-                  {(item.water_price != null || item.electricity_price != null) && (
-                    <p className="mb-2 text-xs text-zinc-500">
-                      {item.water_price != null ? `水¥${item.water_price}/吨` : ""}
-                      {item.water_price != null && item.electricity_price != null
-                        ? " · "
-                        : ""}
-                      {item.electricity_price != null
-                        ? `电¥${item.electricity_price}/度`
-                        : ""}
-                    </p>
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center text-xs text-zinc-400">
+                      无封面
+                    </div>
                   )}
-                  <div className="mt-auto flex items-center justify-between text-sm">
-                    <span className="font-medium text-emerald-600">
-                      {item.price ? `¥${item.price} / 月` : "价格待定"}
-                    </span>
-                    <span className="text-xs text-zinc-500 line-clamp-1">
-                      {item.address || item.city || "位置未知"}
-                    </span>
+                </div>
+
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <h3 className="line-clamp-1 text-base font-semibold text-zinc-900">
+                        {item.title}
+                      </h3>
+                      <p className="mt-1 line-clamp-1 text-xs text-zinc-500">
+                        {item.address || item.city || "位置未知"}
+                      </p>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <div className="text-base font-semibold text-emerald-600">
+                        {item.price != null ? `¥${item.price}` : "价格待定"}
+                      </div>
+                      <div className="text-[11px] text-zinc-500">元/月</div>
+                    </div>
                   </div>
-                  <div className="mt-2 flex items-center justify-between text-xs text-zinc-500">
-                    <span>
-                      通勤：
-                      {item.commute_duration_sec != null
-                        ? `${Math.round(item.commute_duration_sec / 60)} 分钟`
-                        : "未计算"}
-                    </span>
-                    <span>
+
+                  <div className="mt-2 flex flex-wrap gap-1.5 text-[11px] text-zinc-600">
+                    <span className="rounded-full bg-zinc-100 px-2 py-0.5">
+                      通勤 {formatMin(item.commute_duration_sec) ?? "未计算"}
                       {item.commute_distance_m != null
-                        ? `${(item.commute_distance_m / 1000).toFixed(1)} km`
+                        ? ` · ${formatKm(item.commute_distance_m)}`
                         : ""}
                     </span>
+                    {(item.water_price != null || item.electricity_price != null) && (
+                      <span className="rounded-full bg-zinc-100 px-2 py-0.5">
+                        {item.water_price != null ? `水¥${item.water_price}/吨` : ""}
+                        {item.water_price != null && item.electricity_price != null
+                          ? " · "
+                          : ""}
+                        {item.electricity_price != null
+                          ? `电¥${item.electricity_price}/度`
+                          : ""}
+                      </span>
+                    )}
+                    {item.description && (
+                      <span className="rounded-full bg-zinc-100 px-2 py-0.5">
+                        {item.description}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="mt-3 flex items-center gap-2">
+                    <a
+                      href={`/manage?editId=${item.id}`}
+                      className="inline-flex h-7 items-center rounded-full border border-zinc-200 bg-white px-3 text-xs text-zinc-700 hover:bg-zinc-50"
+                    >
+                      编辑
+                    </a>
                   </div>
                 </div>
               </article>

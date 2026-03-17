@@ -1,6 +1,6 @@
  "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 
 type Listing = {
   id: number;
@@ -11,19 +11,33 @@ type Listing = {
   address?: string | null;
   water_price?: number | null;
   electricity_price?: number | null;
+  commute_company_id?: number | null;
+  commute_duration_sec?: number | null;
+  commute_distance_m?: number | null;
   cover_url: string | null;
   lat: number | null;
   lng: number | null;
 };
 
+type Company = {
+  id: number;
+  name: string;
+  city?: string | null;
+  lat: number;
+  lng: number;
+};
+
 export default function ManageListingsPage() {
   const [listings, setListings] = useState<Listing[]>([]);
+  const [companies, setCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [geocodeText, setGeocodeText] = useState("");
   const [geocoding, setGeocoding] = useState(false);
   const [geocodeError, setGeocodeError] = useState<string | null>(null);
+  const [commuting, setCommuting] = useState(false);
+  const [commuteError, setCommuteError] = useState<string | null>(null);
 
   const [form, setForm] = useState<{
     id?: number;
@@ -37,6 +51,9 @@ export default function ManageListingsPage() {
     cover_url: string;
     lat: string;
     lng: string;
+    commute_company_id: string;
+    commute_duration_sec: string;
+    commute_distance_m: string;
   }>({
     title: "",
     description: "",
@@ -48,18 +65,32 @@ export default function ManageListingsPage() {
     cover_url: "",
     lat: "",
     lng: "",
+    commute_company_id: "",
+    commute_duration_sec: "",
+    commute_distance_m: "",
   });
 
   const isEditing = form.id !== undefined;
+  const selectedCompany = useMemo(() => {
+    const cid = form.commute_company_id ? Number(form.commute_company_id) : null;
+    if (!cid) return null;
+    return companies.find((c) => c.id === cid) ?? null;
+  }, [companies, form.commute_company_id]);
 
-  const loadListings = async () => {
+  const loadData = async () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/listings", { method: "GET" });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json?.error ?? "加载失败");
-      setListings(json.data ?? []);
+      const [listingsRes, companiesRes] = await Promise.all([
+        fetch("/api/listings", { method: "GET" }),
+        fetch("/api/companies", { method: "GET" }),
+      ]);
+      const listingsJson = await listingsRes.json();
+      const companiesJson = await companiesRes.json();
+      if (!listingsRes.ok) throw new Error(listingsJson?.error ?? "加载房源失败");
+      if (!companiesRes.ok) throw new Error(companiesJson?.error ?? "加载公司失败");
+      setListings(listingsJson.data ?? []);
+      setCompanies(companiesJson.data ?? []);
     } catch (e: any) {
       setError(e?.message ?? "加载失败");
     }
@@ -67,8 +98,20 @@ export default function ManageListingsPage() {
   };
 
   useEffect(() => {
-    loadListings();
+    loadData();
   }, []);
+
+  useEffect(() => {
+    // 支持从列表页直接点进来编辑：/manage?editId=123
+    if (typeof window === "undefined") return;
+    const editIdStr = new URLSearchParams(window.location.search).get("editId");
+    if (!editIdStr) return;
+    const id = Number(editIdStr);
+    if (!id || !listings.length) return;
+    const target = listings.find((l) => l.id === id);
+    if (target) handleEdit(target);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [listings.length]);
 
   const resetForm = () => {
     setForm({
@@ -82,9 +125,13 @@ export default function ManageListingsPage() {
       cover_url: "",
       lat: "",
       lng: "",
+      commute_company_id: "",
+      commute_duration_sec: "",
+      commute_distance_m: "",
     });
     setGeocodeText("");
     setGeocodeError(null);
+    setCommuteError(null);
   };
 
   const handleSubmit = async (e: FormEvent) => {
@@ -100,6 +147,9 @@ export default function ManageListingsPage() {
       address: form.address.trim() || null,
       water_price: form.water_price ? Number(form.water_price) : null,
       electricity_price: form.electricity_price ? Number(form.electricity_price) : null,
+      commute_company_id: form.commute_company_id ? Number(form.commute_company_id) : null,
+      commute_duration_sec: form.commute_duration_sec ? Number(form.commute_duration_sec) : null,
+      commute_distance_m: form.commute_distance_m ? Number(form.commute_distance_m) : null,
       cover_url: form.cover_url.trim() || null,
       lat: form.lat ? Number(form.lat) : null,
       lng: form.lng ? Number(form.lng) : null,
@@ -108,6 +158,13 @@ export default function ManageListingsPage() {
     try {
       if (!payload.title) {
         throw new Error("标题不能为空");
+      }
+
+      // 新增房源：强制先计算通勤标签
+      if (!isEditing) {
+        if (!payload.commute_company_id || !payload.commute_duration_sec) {
+          throw new Error("新增房源前请先选择公司并计算通勤时间（生成通勤标签）。");
+        }
       }
 
       if (isEditing && form.id) {
@@ -128,7 +185,7 @@ export default function ManageListingsPage() {
         if (!res.ok) throw new Error(json?.error ?? "保存失败");
       }
 
-      await loadListings();
+      await loadData();
       resetForm();
     } catch (err: any) {
       setError(err.message ?? "保存失败，请稍后重试");
@@ -148,6 +205,12 @@ export default function ManageListingsPage() {
       water_price: item.water_price != null ? String(item.water_price) : "",
       electricity_price:
         item.electricity_price != null ? String(item.electricity_price) : "",
+      commute_company_id:
+        item.commute_company_id != null ? String(item.commute_company_id) : "",
+      commute_duration_sec:
+        item.commute_duration_sec != null ? String(item.commute_duration_sec) : "",
+      commute_distance_m:
+        item.commute_distance_m != null ? String(item.commute_distance_m) : "",
       cover_url: item.cover_url ?? "",
       lat: item.lat != null ? String(item.lat) : "",
       lng: item.lng != null ? String(item.lng) : "",
@@ -161,9 +224,54 @@ export default function ManageListingsPage() {
     const res = await fetch(`/api/listings?id=${id}`, { method: "DELETE" });
     const json = await res.json();
     if (!res.ok) setError(json?.error ?? "删除失败");
-    else await loadListings();
+    else await loadData();
     setSaving(false);
   };
+
+  const handleComputeCommute = async () => {
+    setCommuteError(null);
+    const company = selectedCompany;
+    const lat = form.lat ? Number(form.lat) : null;
+    const lng = form.lng ? Number(form.lng) : null;
+    if (!company) {
+      setCommuteError("请先选择一个公司。");
+      return;
+    }
+    if (!lat || !lng) {
+      setCommuteError("请先填写/解析房源经纬度。");
+      return;
+    }
+
+    setCommuting(true);
+    try {
+      const res = await fetch("/api/commute", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          origin: { lat, lng },
+          destination: { lat: company.lat, lng: company.lng },
+          city: company.city || form.city || undefined,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json?.error ?? "通勤计算失败");
+      setForm((f) => ({
+        ...f,
+        commute_company_id: String(company.id),
+        commute_duration_sec: String(json.duration ?? ""),
+        commute_distance_m: String(json.distance ?? ""),
+      }));
+    } catch (e: any) {
+      setCommuteError(e?.message ?? "通勤计算失败，请稍后重试。");
+    } finally {
+      setCommuting(false);
+    }
+  };
+
+  const formatKm = (m: string) =>
+    m ? `${(Number(m) / 1000).toFixed(1)}km` : "";
+  const formatMin = (sec: string) =>
+    sec ? `${Math.round(Number(sec) / 60)}分钟` : "";
 
   return (
     <div className="flex min-h-screen justify-center bg-zinc-50 font-sans">
@@ -195,6 +303,77 @@ export default function ManageListingsPage() {
             </p>
           )}
           <form className="space-y-3" onSubmit={handleSubmit}>
+            <div className="rounded-2xl bg-zinc-50 p-4">
+              <div className="mb-2 text-sm font-medium text-zinc-900">
+                通勤标签（新增房源必填）
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-xs text-zinc-600">
+                    选择公司
+                  </label>
+                  <select
+                    value={form.commute_company_id}
+                    onChange={(e) =>
+                      setForm((f) => ({
+                        ...f,
+                        commute_company_id: e.target.value,
+                      }))
+                    }
+                    className="h-9 w-full rounded-lg border border-zinc-200 px-2 text-sm outline-none focus:border-zinc-900 focus:ring-1 focus:ring-zinc-900"
+                  >
+                    <option value="">请选择公司</option>
+                    {companies.map((c) => (
+                      <option key={c.id} value={String(c.id)}>
+                        {c.city ? `${c.city} · ` : ""}{c.name}
+                      </option>
+                    ))}
+                  </select>
+                  {companies.length === 0 && (
+                    <p className="mt-1 text-xs text-zinc-500">
+                      还没有公司，请先去 <a className="underline" href="/companies">管理公司</a> 添加。
+                    </p>
+                  )}
+                </div>
+                <div className="flex items-end gap-2">
+                  <button
+                    type="button"
+                    onClick={handleComputeCommute}
+                    disabled={commuting || !form.commute_company_id}
+                    className="h-9 rounded-full bg-zinc-900 px-4 text-xs font-medium text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:bg-zinc-400"
+                  >
+                    {commuting ? "计算中..." : "计算通勤并生成标签"}
+                  </button>
+                  <div className="flex flex-wrap gap-1.5 text-[11px] text-zinc-700">
+                    {form.commute_duration_sec && (
+                      <span className="rounded-full bg-white px-2 py-0.5">
+                        通勤 {formatMin(form.commute_duration_sec)}
+                      </span>
+                    )}
+                    {form.commute_distance_m && (
+                      <span className="rounded-full bg-white px-2 py-0.5">
+                        距离 {formatKm(form.commute_distance_m)}
+                      </span>
+                    )}
+                    {selectedCompany && (
+                      <span className="rounded-full bg-white px-2 py-0.5">
+                        公司 {selectedCompany.city ? `${selectedCompany.city} · ` : ""}
+                        {selectedCompany.name}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+              {commuteError && (
+                <p className="mt-2 text-xs text-red-600">{commuteError}</p>
+              )}
+              {!isEditing && (
+                <p className="mt-2 text-[11px] text-zinc-500">
+                  说明：新增房源必须先计算通勤，保存后会把通勤结果打到该房源标签里；后续也可以重新计算更新。
+                </p>
+              )}
+            </div>
+
             <div className="grid gap-3 sm:grid-cols-2">
               <div>
                 <label className="mb-1 block text-sm font-medium text-zinc-700">
@@ -422,6 +601,16 @@ export default function ManageListingsPage() {
               {isEditing && (
                 <button
                   type="button"
+                  onClick={handleComputeCommute}
+                  disabled={commuting || !form.commute_company_id}
+                  className="flex h-9 items-center rounded-full border border-zinc-300 px-4 text-xs font-medium text-zinc-700 transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {commuting ? "计算中..." : "重新计算通勤标签"}
+                </button>
+              )}
+              {isEditing && (
+                <button
+                  type="button"
                   onClick={resetForm}
                   className="flex h-9 items-center rounded-full border border-zinc-300 px-4 text-xs font-medium text-zinc-700 transition hover:bg-zinc-50"
                 >
@@ -458,6 +647,11 @@ export default function ManageListingsPage() {
                       {item.price != null && (
                         <span className="text-xs font-medium text-emerald-700">
                           ¥{item.price}
+                        </span>
+                      )}
+                      {item.commute_duration_sec != null && (
+                        <span className="text-xs text-zinc-500">
+                          · 通勤 {Math.round(item.commute_duration_sec / 60)}分钟
                         </span>
                       )}
                     </div>
